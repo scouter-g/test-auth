@@ -1,7 +1,7 @@
 const { TableClient } = require("@azure/data-tables");
-const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 
+// Convert to base64url for JWT
 function base64url(input) {
     return Buffer.from(input)
         .toString("base64")
@@ -10,6 +10,7 @@ function base64url(input) {
         .replace(/\//g, "_");
 }
 
+// Sign JWT using HS256
 function signJWT(payload, secret) {
     const header = { alg: "HS256", typ: "JWT" };
     const headerEncoded = base64url(JSON.stringify(header));
@@ -27,6 +28,30 @@ function signJWT(payload, secret) {
     return `${data}.${signature}`;
 }
 
+// PBKDF2 password verification
+async function verifyPassword(password, storedHash) {
+    // storedHash format:
+    // pbkdf2$100000$<saltHex>$<hashHex>
+    const [method, iterations, saltHex, hashHex] = storedHash.split("$");
+
+    if (method !== "pbkdf2") {
+        throw new Error("Unsupported password hash format");
+    }
+
+    const salt = Buffer.from(saltHex, "hex");
+    const expected = Buffer.from(hashHex, "hex");
+
+    const derived = crypto.pbkdf2Sync(
+        password,
+        salt,
+        parseInt(iterations),
+        expected.length,
+        "sha256"
+    );
+
+    return crypto.timingSafeEqual(derived, expected);
+}
+
 module.exports = async function (context, req) {
     const { email, password } = req.body || {};
 
@@ -40,7 +65,6 @@ module.exports = async function (context, req) {
 
     const lowerEmail = email.toLowerCase();
 
-    // ENV variables you will add in SWA → Configuration
     const connectionString = process.env.STORAGE_CONNECTION_STRING;
     const tableName = "Users";
 
@@ -57,7 +81,16 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+    let passwordMatches = false;
+    try {
+        passwordMatches = await verifyPassword(password, user.passwordHash);
+    } catch (err) {
+        context.res = {
+            status: 500,
+            body: "Password verification error"
+        };
+        return;
+    }
 
     if (!passwordMatches) {
         context.res = {
