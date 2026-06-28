@@ -81,16 +81,14 @@ module.exports = async function (context, req) {
         return;
     }
 
-    let passwordMatches = false;
-    try {
-        passwordMatches = await verifyPassword(password, user.passwordHash);
-    } catch (err) {
-        context.res = {
-            status: 500,
-            body: "Password verification error"
-        };
-        return;
-    }
+    context.res = {
+        status: 200,
+        body: {
+            debug: "User loaded",
+            user: user
+        }
+    };
+    return;
 
     if (!passwordMatches) {
         context.res = {
