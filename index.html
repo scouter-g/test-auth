@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Auth Test</title>
+</head>
+<body>
+    <h1>Static Web App Test</h1>
+    <p>If you see this page, your SWA is deployed correctly.</p>
+
+    <h2>API Test</h2>
+    <button onclick="callApi()">Call /api/hello</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function callApi() {
+            const res = await fetch('/api/hello');
+            const text = await res.text();
+            document.getElementById('output').textContent = text;
+        }
+    </script>
+</body>
+</html>
