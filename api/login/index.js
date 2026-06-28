@@ -1,17 +1,6 @@
+const { TableClient } = require("@azure/data-tables");
+const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-
-// Replace with your real user table lookup
-async function getUserByEmail(email) {
-    // Hardcoded test user
-    if (email === "test@example.com") {
-        return {
-            id: 1,
-            email: "test@example.com",
-            password: "Password123" // plain text for demo only
-        };
-    }
-    return null;
-}
 
 function base64url(input) {
     return Buffer.from(input)
@@ -22,11 +11,7 @@ function base64url(input) {
 }
 
 function signJWT(payload, secret) {
-    const header = {
-        alg: "HS256",
-        typ: "JWT"
-    };
-
+    const header = { alg: "HS256", typ: "JWT" };
     const headerEncoded = base64url(JSON.stringify(header));
     const payloadEncoded = base64url(JSON.stringify(payload));
 
@@ -53,9 +38,28 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const user = await getUserByEmail(email);
+    const lowerEmail = email.toLowerCase();
 
-    if (!user || user.password !== password) {
+    // ENV variables you will add in SWA → Configuration
+    const connectionString = process.env.STORAGE_CONNECTION_STRING;
+    const tableName = "Users";
+
+    const client = TableClient.fromConnectionString(connectionString, tableName);
+
+    let user;
+    try {
+        user = await client.getEntity("user", lowerEmail);
+    } catch (err) {
+        context.res = {
+            status: 401,
+            body: "Invalid credentials"
+        };
+        return;
+    }
+
+    const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+
+    if (!passwordMatches) {
         context.res = {
             status: 401,
             body: "Invalid credentials"
@@ -67,16 +71,22 @@ module.exports = async function (context, req) {
 
     const token = signJWT(
         {
-            sub: user.id,
-            email: user.email,
+            sub: user.RowKey,
+            role: user.role,
+            displayName: user.displayName,
             iat: Math.floor(Date.now() / 1000),
-            exp: Math.floor(Date.now() / 1000) + 3600 // 1 hour
+            exp: Math.floor(Date.now() / 1000) + 3600
         },
         secret
     );
 
     context.res = {
         status: 200,
-        body: { token }
+        body: {
+            token,
+            role: user.role,
+            displayName: user.displayName,
+            mustReset: user.mustReset
+        }
     };
 };
