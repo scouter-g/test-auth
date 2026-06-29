@@ -11,12 +11,17 @@ async function login() {
 
     const res = await fetch("/api/hello", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json"
+        },
         body: JSON.stringify({ email, password })
     });
 
+    // Try to read JSON — this is where the failure happens
     const data = await res.json();
-    document.getElementById("loginOutput").textContent = JSON.stringify(data, null, 2);
+
+    document.getElementById("loginOutput").textContent =
+        JSON.stringify(data, null, 2);
 
     if (data.token) {
         localStorage.setItem("jwt", data.token);
