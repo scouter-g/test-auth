@@ -1,7 +1,6 @@
 const { TableClient } = require("@azure/data-tables");
 const crypto = require("crypto");
 
-// Convert to base64url for JWT
 function base64url(input) {
     return Buffer.from(input)
         .toString("base64")
@@ -10,7 +9,6 @@ function base64url(input) {
         .replace(/\//g, "_");
 }
 
-// Sign JWT using HS256
 function signJWT(payload, secret) {
     const header = { alg: "HS256", typ: "JWT" };
     const headerEncoded = base64url(JSON.stringify(header));
@@ -28,7 +26,6 @@ function signJWT(payload, secret) {
     return `${data}.${signature}`;
 }
 
-// PBKDF2 password verification
 async function verifyPassword(password, storedHash) {
     const [method, iterations, saltHex, hashHex] = storedHash.split("$");
 
@@ -62,17 +59,29 @@ module.exports = async function (context, req) {
     }
 
     const lowerEmail = email.toLowerCase();
-
-    const connectionString = process.env.STORAGE_CONNECTION_STRING;
     const tableName = "Users";
 
-    const client = TableClient.fromConnectionString(connectionString, tableName);
+    let client;
+    try {
+        const connectionString = process.env.STORAGE_CONNECTION_STRING;
+        client = TableClient.fromConnectionString(connectionString, tableName);
+    } catch (err) {
+        context.res = {
+            status: 500,
+            body: {
+                error: "Failed to create TableClient",
+                message: err.message,
+                name: err.name,
+                stack: err.stack
+            }
+        };
+        return;
+    }
 
     let user;
     try {
         user = await client.getEntity("user", lowerEmail);
     } catch (err) {
-        // REAL DEBUG BLOCK — this will finally show the actual error
         context.res = {
             status: 500,
             body: {
@@ -85,7 +94,6 @@ module.exports = async function (context, req) {
         return;
     }
 
-    // Now verify password
     let passwordMatches = false;
     try {
         passwordMatches = await verifyPassword(password, user.passwordHash);
