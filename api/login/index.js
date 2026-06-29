@@ -30,8 +30,6 @@ function signJWT(payload, secret) {
 
 // PBKDF2 password verification
 async function verifyPassword(password, storedHash) {
-    // storedHash format:
-    // pbkdf2$100000$<saltHex>$<hashHex>
     const [method, iterations, saltHex, hashHex] = storedHash.split("$");
 
     if (method !== "pbkdf2") {
@@ -81,14 +79,17 @@ module.exports = async function (context, req) {
         return;
     }
 
-    context.res = {
-        status: 200,
-        body: {
-            debug: "User loaded",
-            user: user
-        }
-    };
-    return;
+    // VERIFY PASSWORD
+    let passwordMatches = false;
+    try {
+        passwordMatches = await verifyPassword(password, user.passwordHash);
+    } catch (err) {
+        context.res = {
+            status: 500,
+            body: "Password verification error"
+        };
+        return;
+    }
 
     if (!passwordMatches) {
         context.res = {
@@ -98,6 +99,7 @@ module.exports = async function (context, req) {
         return;
     }
 
+    // ISSUE JWT
     const secret = process.env.JWT_SECRET || "dev-secret";
 
     const token = signJWT(
