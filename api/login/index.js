@@ -1,51 +1,4 @@
 const { TableClient } = require("@azure/data-tables");
-const crypto = require("crypto");
-
-function base64url(input) {
-    return Buffer.from(input)
-        .toString("base64")
-        .replace(/=/g, "")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_");
-}
-
-function signJWT(payload, secret) {
-    const header = { alg: "HS256", typ: "JWT" };
-    const headerEncoded = base64url(JSON.stringify(header));
-    const payloadEncoded = base64url(JSON.stringify(payload));
-
-    const data = `${headerEncoded}.${payloadEncoded}`;
-    const signature = crypto
-        .createHmac("sha256", secret)
-        .update(data)
-        .digest("base64")
-        .replace(/=/g, "")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_");
-
-    return `${data}.${signature}`;
-}
-
-async function verifyPassword(password, storedHash) {
-    const [method, iterations, saltHex, hashHex] = storedHash.split("$");
-
-    if (method !== "pbkdf2") {
-        throw new Error("Unsupported password hash format");
-    }
-
-    const salt = Buffer.from(saltHex, "hex");
-    const expected = Buffer.from(hashHex, "hex");
-
-    const derived = crypto.pbkdf2Sync(
-        password,
-        salt,
-        parseInt(iterations),
-        expected.length,
-        "sha256"
-    );
-
-    return crypto.timingSafeEqual(derived, expected);
-}
 
 module.exports = async function (context, req) {
     const { email, password } = req.body || {};
@@ -59,20 +12,17 @@ module.exports = async function (context, req) {
     }
 
     const lowerEmail = email.toLowerCase();
-    const tableName = "Users";
 
     let client;
     try {
         const connectionString = process.env.STORAGE_CONNECTION_STRING;
-        client = TableClient.fromConnectionString(connectionString, tableName);
+        client = TableClient.fromConnectionString(connectionString, "Users");
     } catch (err) {
         context.res = {
             status: 500,
             body: {
                 error: "Failed to create TableClient",
-                message: err.message,
-                name: err.name,
-                stack: err.stack
+                message: err.message
             }
         };
         return;
@@ -83,58 +33,27 @@ module.exports = async function (context, req) {
         user = await client.getEntity("user", lowerEmail);
     } catch (err) {
         context.res = {
-            status: 500,
-            body: {
-                error: "Storage lookup failed",
-                message: err.message,
-                name: err.name,
-                stack: err.stack
-            }
+            status: 401,
+            body: "Invalid credentials (user not found)"
         };
         return;
     }
 
-    let passwordMatches = false;
-    try {
-        passwordMatches = await verifyPassword(password, user.passwordHash);
-    } catch (err) {
-        context.res = {
-            status: 500,
-            body: {
-                error: "Password verification error",
-                message: err.message,
-                name: err.name,
-                stack: err.stack
-            }
-        };
-        return;
-    }
-
-    if (!passwordMatches) {
+    // CLEAR TEXT PASSWORD CHECK
+    if (password !== user.passwordHash) {
         context.res = {
             status: 401,
-            body: "Invalid credentials"
+            body: "Invalid credentials (password mismatch)"
         };
         return;
     }
 
-    const secret = process.env.JWT_SECRET || "dev-secret";
-
-    const token = signJWT(
-        {
-            sub: user.RowKey,
-            role: user.role,
-            displayName: user.displayName,
-            iat: Math.floor(Date.now() / 1000),
-            exp: Math.floor(Date.now() / 1000) + 3600
-        },
-        secret
-    );
-
+    // SUCCESS — return user info
     context.res = {
         status: 200,
         body: {
-            token,
+            message: "Login successful",
+            email: user.RowKey,
             role: user.role,
             displayName: user.displayName,
             mustReset: user.mustReset
