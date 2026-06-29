@@ -72,21 +72,32 @@ module.exports = async function (context, req) {
     try {
         user = await client.getEntity("user", lowerEmail);
     } catch (err) {
+        // REAL DEBUG BLOCK — this will finally show the actual error
         context.res = {
-            status: 401,
-            body: "Invalid credentials"
+            status: 500,
+            body: {
+                error: "Storage lookup failed",
+                message: err.message,
+                name: err.name,
+                stack: err.stack
+            }
         };
         return;
     }
 
-    // VERIFY PASSWORD
+    // Now verify password
     let passwordMatches = false;
     try {
         passwordMatches = await verifyPassword(password, user.passwordHash);
     } catch (err) {
         context.res = {
             status: 500,
-            body: "Password verification error"
+            body: {
+                error: "Password verification error",
+                message: err.message,
+                name: err.name,
+                stack: err.stack
+            }
         };
         return;
     }
@@ -99,7 +110,6 @@ module.exports = async function (context, req) {
         return;
     }
 
-    // ISSUE JWT
     const secret = process.env.JWT_SECRET || "dev-secret";
 
     const token = signJWT(
