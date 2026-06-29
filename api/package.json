@@ -1,0 +1,9 @@
+{
+  "name": "swa-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "engines": {
+    "node": "18"
+  }
+}
