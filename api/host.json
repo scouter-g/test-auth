@@ -11,13 +11,6 @@
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
     "version": "[4.*, 5.0.0)"
-  },
-  "customHandler": {
-    "description": {
-      "arguments": ["--port", "%FUNCTIONS_CUSTOMHANDLER_PORT%"]
-    }
-  },
-  "managedDependency": {
-    "enabled": false
   }
 }
+
