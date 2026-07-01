@@ -1,15 +1,22 @@
 const { app } = require('@azure/functions');
 const { TableClient } = require('@azure/data-tables');
 
-// Pulls connection string dynamically from SWA environment variables
-const connectionString = process.env.CUSTOM_STORAGE_CONNECTION;
-const client = TableClient.fromConnectionString(connectionString, "Users");
-
 app.http('login', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
+            // 1. Validate environment configuration safely inside the try block
+            const connectionString = process.env.CUSTOM_STORAGE_CONNECTION;
+            if (!connectionString) {
+                context.error("CRITICAL CONFIG ERROR: CUSTOM_STORAGE_CONNECTION environment variable is missing!");
+                return { status: 500, jsonBody: { error: "Backend configuration error. Connection string missing." } };
+            }
+
+            // 2. Safe client initialization
+            const client = TableClient.fromConnectionString(connectionString, "Users");
+            
+            // 3. Process the JSON payload safely
             const body = await request.json();
             const { email, password } = body;
 
@@ -17,17 +24,16 @@ app.http('login', {
                 return { status: 400, jsonBody: { error: "Email and password are required." } };
             }
 
-            // Instantly look up the user by PartitionKey ("users") and RowKey (email)
+            // 4. Query the Users table
             const user = await client.getEntity("users", email.toLowerCase().trim());
 
-            // Simple validation (Upgrade to Hashing in production!)
             if (user.Password === password) {
                 return {
                     status: 200,
                     jsonBody: {
                         message: "Success",
                         email: user.rowKey,
-                        token: "mock-jwt-token-xyz-2026" // Replace with real generated JWT if needed
+                        token: "mock-jwt-token-xyz-2026"
                     }
                 };
             } else {
@@ -35,13 +41,14 @@ app.http('login', {
             }
 
         } catch (error) {
-            // Azure Tables throws a 404 if the exact RowKey isn't found
+            // Catch data lookups missing from table rows safely
             if (error.statusCode === 404) {
                 return { status: 401, jsonBody: { error: "Invalid credentials." } };
             }
             
-            context.log(`Error: ${error.message}`);
-            return { status: 500, jsonBody: { error: "Internal server error." } };
+            // Catch connection formatting errors safely
+            context.error(`API Runtime Exception: ${error.message}`);
+            return { status: 500, jsonBody: { error: `Server error: ${error.message}` } };
         }
     }
 });
