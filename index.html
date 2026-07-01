@@ -1,30 +1,46 @@
-<h2>Login</h2>
-<input id="email" placeholder="Email">
-<input id="password" placeholder="Password" type="password">
-<button onclick="login()">Login</button>
-<pre id="loginOutput"></pre>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scout Inventory - Login</title>
+</head>
+<body>
+    <h2>Scout Inventory Login</h2>
+    <form id="loginForm">
+        <input type="email" id="email" placeholder="Email" required><br><br>
+        <input type="password" id="password" placeholder="Password" required><br><br>
+        <button type="submit">Log In</button>
+    </form>
+    <p id="message" style="color: red;"></p>
 
-<script>
-async function login() {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const messageEl = document.getElementById('message');
 
-    const res = await fetch("/api/hello", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, password })
-    });
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
 
-    // Try to read JSON — this is where the failure happens
-    const data = await res.json();
+                const data = await response.json();
 
-    document.getElementById("loginOutput").textContent =
-        JSON.stringify(data, null, 2);
-
-    if (data.token) {
-        localStorage.setItem("jwt", data.token);
-    }
-}
-</script>
+                if (response.ok) {
+                    // Save your custom token or session identifier
+                    localStorage.setItem('userToken', data.token);
+                    localStorage.setItem('userEmail', data.email);
+                    window.location.href = '/dashboard.html';
+                } else {
+                    messageEl.textContent = data.error || 'Login failed';
+                }
+            } catch (err) {
+                messageEl.textContent = 'Server error occurred.';
+            }
+        });
+    </script>
+</body>
+</html>
